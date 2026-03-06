@@ -66,14 +66,14 @@ public class ServerMixin {
 			}else if(order.currentStatus == OrderStatus.ORDER_CHEST_ARRIVED) {
 				if(!order.entitySpawned) {
 					PlayerEntity p = playerManager.getPlayer(UUID.fromString(order.orderUUID));
-					World w = p.world;
+					World w = p.getWorld();
 					w.spawnEntity(new EntityDeliveryChest(w, new Vec3d(p.getX(), p.getY(), p.getZ()), p.getUuid()));
 					order.entitySpawned = true;
 				}
 			}else if(order.currentStatus == OrderStatus.PAYMENT_CHEST_ARRIVED) {
 				if(!order.entitySpawned) {
 					PlayerEntity p = playerManager.getPlayer(UUID.fromString(order.orderUUID));
-					World w = p.world;
+					World w = p.getWorld();
 					w.spawnEntity(new EntityDeliveryChest(w, new Vec3d(p.getX(), p.getY(), p.getZ()), p.getUuid()));
 					order.entitySpawned = true;
 				}

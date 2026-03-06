@@ -10,34 +10,35 @@ import net.minecraft.entity.data.TrackedData;
 import net.minecraft.entity.data.TrackedDataHandlerRegistry;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.Packet;
+import net.minecraft.nbt.NbtCompound;
+import net.minecraft.network.listener.ClientPlayPacketListener;
+import net.minecraft.network.packet.Packet;
 import net.minecraft.network.packet.s2c.play.EntitySpawnS2CPacket;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 
-public class EntityCRTScreen extends Entity{
+public class EntityCRTScreen extends Entity {
 	private static final TrackedData<Float> LOOK_AT_POS_X =
 			DataTracker.registerData(EntityCRTScreen.class, TrackedDataHandlerRegistry.FLOAT);
 	private static final TrackedData<Float> LOOK_AT_POS_Y =
 			DataTracker.registerData(EntityCRTScreen.class, TrackedDataHandlerRegistry.FLOAT);
 	private static final TrackedData<Float> LOOK_AT_POS_Z =
 			DataTracker.registerData(EntityCRTScreen.class, TrackedDataHandlerRegistry.FLOAT);
-	
+
 	private static final TrackedData<String> OWNER_UUID =
 			DataTracker.registerData(EntityCRTScreen.class, TrackedDataHandlerRegistry.STRING);
-	
+
 	public EntityCRTScreen(EntityType<?> type, World world) {
 		super(type, world);
 	}
-	
+
 	public EntityCRTScreen(World world, double x, double y, double z) {
 		this(EntityList.CRT_SCREEN, world);
 		this.updatePosition(x, y, z);
 	}
-	
+
 	public EntityCRTScreen(World world, Double x, Double y, Double z, Vec3d lookAt, String uuid) {
 		this(EntityList.CRT_SCREEN, world);
 		this.updatePosition(x, y, z);
@@ -46,11 +47,11 @@ public class EntityCRTScreen extends Entity{
 		this.getDataTracker().set(LOOK_AT_POS_Z, (float)lookAt.z);
 		this.getDataTracker().set(OWNER_UUID, uuid);
 	}
-	
+
 	public Vec3d getLookAtPos() {
 		return new Vec3d(this.getDataTracker().get(LOOK_AT_POS_X),
-						 this.getDataTracker().get(LOOK_AT_POS_Y),
-						 this.getDataTracker().get(LOOK_AT_POS_Z));
+				this.getDataTracker().get(LOOK_AT_POS_Y),
+				this.getDataTracker().get(LOOK_AT_POS_Z));
 	}
 
 	@Override
@@ -60,31 +61,33 @@ public class EntityCRTScreen extends Entity{
 		this.getDataTracker().startTracking(LOOK_AT_POS_Z, 0f);
 		this.getDataTracker().startTracking(OWNER_UUID, "");
 	}
+
 	@Override
-	protected void readCustomDataFromTag(CompoundTag tag) {
+	protected void readCustomDataFromNbt(NbtCompound tag) {
 		this.getDataTracker().set(LOOK_AT_POS_X, tag.getFloat("LookAtX"));
 		this.getDataTracker().set(LOOK_AT_POS_Y, tag.getFloat("LookAtY"));
 		this.getDataTracker().set(LOOK_AT_POS_Z, tag.getFloat("LookAtZ"));
 		this.getDataTracker().set(OWNER_UUID, tag.getString("Owner"));
 	}
+
 	@Override
-	protected void writeCustomDataToTag(CompoundTag tag) {
+	protected void writeCustomDataToNbt(NbtCompound tag) {
 		tag.putFloat("LookAtX", this.getDataTracker().get(LOOK_AT_POS_X));
 		tag.putFloat("LookAtY", this.getDataTracker().get(LOOK_AT_POS_Y));
 		tag.putFloat("LookAtZ", this.getDataTracker().get(LOOK_AT_POS_Z));
 		tag.putString("Owner", this.getDataTracker().get(OWNER_UUID));
 	}
-	
+
 	@Override
 	public ActionResult interact(PlayerEntity player, Hand hand) {
-		if(!player.world.isClient) {
+		if(!player.getWorld().isClient) { // Заменено world на getWorld()
 			if(player.isSneaking()) {
 				this.kill();
-				player.world.spawnEntity(new ItemEntity(player.world,
+				player.getWorld().spawnEntity(new ItemEntity(player.getWorld(),
 						this.getPos().x, this.getPos().y, this.getPos().z,
 						new ItemStack(ItemList.ITEM_CRTSCREEN)));
 			}
-		}else {
+		} else {
 			if(!player.isSneaking()) {
 				if(this.getOwnerUUID().equals(player.getUuid().toString())) {
 					MainMod.focus.run();
@@ -93,25 +96,28 @@ public class EntityCRTScreen extends Entity{
 		}
 		return ActionResult.SUCCESS;
 	}
-	
+
 	@Override
 	public void tick() {
 		if(getOwnerUUID().isEmpty()) {
 			this.kill();
 		}
 	}
-	
+
+	// В версии 1.20.1 метод collides() переименован в canHit(),
+	// он отвечает за то же самое (позволяет кликать по энтити)
 	@Override
-	public boolean collides() {
+	public boolean canHit() {
 		return true;
 	}
-	
+
 	public String getOwnerUUID() {
 		return this.getDataTracker().get(OWNER_UUID);
 	}
 
+	// Возвращаем ваш оригинальный метод с правильными импортами 1.20.1
 	@Override
-	public Packet<?> createSpawnPacket() {
+	public Packet<ClientPlayPacketListener> createSpawnPacket() {
 		return new EntitySpawnS2CPacket(this);
 	}
 

@@ -29,7 +29,6 @@ import mcvmcomputers.item.ItemOrderingTablet;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.client.texture.NativeImage;
 import net.minecraft.client.texture.NativeImageBackedTexture;
 import net.minecraft.client.world.ClientWorld;
@@ -42,34 +41,29 @@ import net.minecraft.util.math.Vec3d;
 public class GameloopMixin {
 	@Shadow
 	public ClientPlayerEntity player;
-	
+
 	@Shadow
 	public HitResult crosshairTarget;
-	
+
 	@Shadow
 	public ClientWorld world;
-	
+
 	@Shadow
 	public Screen currentScreen;
-	
-	@Shadow
-	private boolean paused;
-	
-	@Shadow
-	private float pausedTickDelta;
-	
-	@Shadow
-	private RenderTickCounter renderTickCounter;
-	
+
+	// Я удалил неиспользуемые @Shadow (paused, renderTickCounter и т.д.),
+	// так как они изменены в 1.20.1 и вызовут ошибки Mixin, при этом в коде они вам не нужны.
+
 	@Inject(at = @At("HEAD"), method = "run")
 	private void run(CallbackInfo info) {
 		MinecraftClient mcc = MinecraftClient.getInstance();
-		mcc.openScreen(new GuiSetup());
+		// openScreen заменен на setScreen
+		mcc.setScreen(new GuiSetup());
 		vhdDirectory = new File(mcc.runDirectory, "vm_computers/vhds");
 		vhdDirectory.mkdirs();
 		isoDirectory = new File(mcc.runDirectory, "vm_computers/isos");
 		isoDirectory.mkdirs();
-		
+
 		File num = new File(vhdDirectory.getParentFile(), "vhdnum");
 		if(num.exists()) {
 			try {
@@ -80,7 +74,7 @@ public class GameloopMixin {
 			}
 		}
 	}
-	
+
 	@Inject(at = @At("HEAD"), method = "render")
 	private void render(CallbackInfo info) {
 		if(lastDeltaTimeTime == 0) {
@@ -89,10 +83,10 @@ public class GameloopMixin {
 			long now = System.currentTimeMillis();
 			long diff = now - lastDeltaTimeTime;
 			lastDeltaTimeTime = now;
-			
+
 			deltaTime = (float) diff / 1000f;
 		}
-		
+
 		if(tabletOS != null) {
 			tabletOS.generateTexture();
 		}else {
@@ -120,11 +114,11 @@ public class GameloopMixin {
 				e1.printStackTrace();
 			}
 		}
-		
+
 		if(vmTurnedOn) {
 			if(player == null) {
 				vmUpdateThread.interrupt();
-				
+
 				IMachine m = vb.findMachine("VmComputersVm");
 				ISession sess = vbManager.getSessionObject();
 				m.lockMachine(sess, LockType.Shared);
@@ -139,15 +133,18 @@ public class GameloopMixin {
 					vmUpdateThread = new Thread(new VMRunnable(), "VM Update Thread");
 					vmUpdateThread.start();
 				}
-				
+
 				generatePCScreen();
 			}
 		}
-		
+
 		if(player != null) {
+			// getActiveItem заменен не был, он все еще работает
 			if(player.getActiveItem() != null) {
 				boolean tabletOut = false;
-				for(ItemStack is : player.getItemsHand()) {
+
+				// getItemsHand() заменен на getHandItems()
+				for(ItemStack is : player.getHandItems()) {
 					if(is.getItem() != null) {
 						if(is.getItem() instanceof ItemOrderingTablet) {
 							tabletOut = true;
@@ -155,23 +152,24 @@ public class GameloopMixin {
 						}
 					}
 				}
-				
+
 				if(tabletOut != tabletOS.tabletOn) {
 					tabletOS.tabletOn = tabletOut;
-					
+
 					if(tabletOut) {
 						tabletOS.tabletTakenOut();
 					}else {
 						tabletOS.tabletUnequipped();
 					}
 				}
-				
-				for(ItemStack is : player.getItemsHand()) {
+
+				// getItemsHand() заменен на getHandItems()
+				for(ItemStack is : player.getHandItems()) {
 					if(is.getItem() != null) {
 						if(ItemList.PLACABLE_ITEMS.contains(is.getItem())) {
 							if(thePreviewEntity != null) {
 								thePreviewEntity.setItem(is);
-								if(crosshairTarget != null) { 
+								if(crosshairTarget != null) {
 									Vec3d hit = crosshairTarget.getPos();
 									thePreviewEntity.updatePosition(hit.x, hit.y, hit.z);
 								}else {
@@ -181,7 +179,7 @@ public class GameloopMixin {
 								if(crosshairTarget != null) {
 									Vec3d hit = crosshairTarget.getPos();
 									thePreviewEntity = new EntityItemPreview(world, hit.x, hit.y, hit.z, is);
-									this.world.addEntity(Integer.MAX_VALUE-20,thePreviewEntity);
+									this.world.addEntity(Integer.MAX_VALUE-20, thePreviewEntity);
 								}
 							}
 						}else {
@@ -254,11 +252,11 @@ public class GameloopMixin {
 		if(tabletThread != null) {
 			tabletThread.interrupt();
 		}
-		
+
 		vmTurningOn = false;
 		vmTurnedOn = false;
 		vmTurningOff = false;
-		
+
 		if(vbManager != null) {
 			boolean vmExists = false;
 			IMachine mach = null;
@@ -266,7 +264,7 @@ public class GameloopMixin {
 				mach = vb.findMachine("VmComputersVm");
 				vmExists = true;
 			}catch(VBoxException e) {}
-			
+
 			if(vmExists) {
 				if(mach.getState() == MachineState.Running || mach.getState() == MachineState.Starting) {
 					if(vmSession != null) {

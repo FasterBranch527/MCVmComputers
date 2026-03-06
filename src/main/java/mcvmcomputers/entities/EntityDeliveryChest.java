@@ -17,29 +17,31 @@ import net.minecraft.entity.data.TrackedDataHandlerRegistry;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.Packet;
+import net.minecraft.nbt.NbtCompound; // Изменено
+import net.minecraft.network.listener.ClientPlayPacketListener; // Добавлено
+import net.minecraft.network.packet.Packet; // Изменено
 import net.minecraft.network.packet.s2c.play.EntitySpawnS2CPacket;
-import net.minecraft.text.TranslatableText;
+import net.minecraft.registry.Registries; // Изменено (Registry -> Registries)
+import net.minecraft.text.Text; // Изменено (TranslatableText -> Text)
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.registry.Registry;
 import net.minecraft.world.World;
 
-public class EntityDeliveryChest extends Entity{
+public class EntityDeliveryChest extends Entity {
+	// ВАЖНО: Здесь был баг из-за копипаста (был EntityFlatScreen.class), я исправил на EntityDeliveryChest.class
 	private static final TrackedData<Float> TARGET_X =
-			DataTracker.registerData(EntityFlatScreen.class, TrackedDataHandlerRegistry.FLOAT);
+			DataTracker.registerData(EntityDeliveryChest.class, TrackedDataHandlerRegistry.FLOAT);
 	private static final TrackedData<Float> TARGET_Y =
-			DataTracker.registerData(EntityFlatScreen.class, TrackedDataHandlerRegistry.FLOAT);
+			DataTracker.registerData(EntityDeliveryChest.class, TrackedDataHandlerRegistry.FLOAT);
 	private static final TrackedData<Float> TARGET_Z =
-			DataTracker.registerData(EntityFlatScreen.class, TrackedDataHandlerRegistry.FLOAT);
+			DataTracker.registerData(EntityDeliveryChest.class, TrackedDataHandlerRegistry.FLOAT);
 	private static final TrackedData<Boolean> TAKING_OFF =
-			DataTracker.registerData(EntityFlatScreen.class, TrackedDataHandlerRegistry.BOOLEAN);
+			DataTracker.registerData(EntityDeliveryChest.class, TrackedDataHandlerRegistry.BOOLEAN);
 	private static final TrackedData<String> DELIVERY_UUID =
-			DataTracker.registerData(EntityFlatScreen.class, TrackedDataHandlerRegistry.STRING);
-	
+			DataTracker.registerData(EntityDeliveryChest.class, TrackedDataHandlerRegistry.STRING);
+
 	//Client vars
 	public float renderRot = 90f;
 	public float upLeg01Rot = 3f;
@@ -52,16 +54,16 @@ public class EntityDeliveryChest extends Entity{
 	public float renderOffZ = -80;
 	public boolean fire = false;
 	public SoundInstance rocketSound;
-	
+
 	//Server vars
 	public float takeOffTime = 0f;
-	
+
 	//z -80 y 80 starting position from target
-	
+
 	public EntityDeliveryChest(EntityType<?> type, World world) {
 		super(type, world);
 	}
-	
+
 	public EntityDeliveryChest(World world, Vec3d target, UUID owner) {
 		super(EntityList.DELIVERY_CHEST, world);
 		this.getDataTracker().set(TARGET_X, (float)target.x);
@@ -70,7 +72,7 @@ public class EntityDeliveryChest extends Entity{
 		this.getDataTracker().set(DELIVERY_UUID, owner.toString());
 		this.updatePosition(target.x, target.y, target.z);
 	}
-	
+
 	public EntityDeliveryChest(World world, double targetX, double targetY, double targetZ) {
 		super(EntityList.DELIVERY_CHEST, world);
 		this.getDataTracker().set(TARGET_X, (float)targetX);
@@ -87,26 +89,27 @@ public class EntityDeliveryChest extends Entity{
 		this.getDataTracker().startTracking(DELIVERY_UUID, "");
 		this.getDataTracker().startTracking(TAKING_OFF, false);
 	}
-	
+
 	@Override
-	protected void readCustomDataFromTag(CompoundTag tag) {
+	protected void readCustomDataFromNbt(NbtCompound tag) {
 		this.getDataTracker().set(TARGET_X, tag.getFloat("TargetX"));
 		this.getDataTracker().set(TARGET_Y, tag.getFloat("TargetY"));
 		this.getDataTracker().set(TARGET_Z, tag.getFloat("TargetZ"));
 		this.getDataTracker().set(DELIVERY_UUID, tag.getString("DeliveryUUID"));
 	}
+
 	@Override
-	protected void writeCustomDataToTag(CompoundTag tag) {
+	protected void writeCustomDataToNbt(NbtCompound tag) {
 		tag.putFloat("TargetX", this.getDataTracker().get(TARGET_X));
 		tag.putFloat("TargetY", this.getDataTracker().get(TARGET_Y));
 		tag.putFloat("TargetZ", this.getDataTracker().get(TARGET_Z));
 		tag.putString("DeliveryUUID", this.getDataTracker().get(DELIVERY_UUID));
 	}
-	
+
 	@Override
 	public void tick() {
 		super.tick();
-		if(!this.world.isClient) {
+		if(!this.getWorld().isClient) { // Изменено world -> getWorld()
 			if(this.getDeliveryUUID().isEmpty()) {
 				this.kill();
 			}
@@ -116,7 +119,12 @@ public class EntityDeliveryChest extends Entity{
 				TabletOrder to = MainMod.orders.get(UUID.fromString(getDeliveryUUID()));
 				if(to.currentStatus == OrderStatus.PAYMENT_CHEST_RECEIVING || to.currentStatus == OrderStatus.ORDER_CHEST_RECEIVED) {
 					this.getDataTracker().set(TAKING_OFF, true);
-					takeOffTime += this.getServer().getTickTime() / 1000f;
+
+					// IDE может ругаться, что getServer() бывает null, но в оригинале было так же.
+					if (this.getServer() != null) {
+						takeOffTime += this.getServer().getTickTime() / 1000f;
+					}
+
 					if(takeOffTime > 0.5f) {
 						this.kill();
 						to.entitySpawned = false;
@@ -128,10 +136,10 @@ public class EntityDeliveryChest extends Entity{
 			}
 		}
 	}
-	
+
 	@Override
 	public ActionResult interact(PlayerEntity player, Hand hand) {
-		if(player.world.isClient) {
+		if(player.getWorld().isClient) { // Изменено player.world -> player.getWorld()
 			return ActionResult.FAIL;
 		}
 		if(hand == Hand.OFF_HAND) {
@@ -141,9 +149,9 @@ public class EntityDeliveryChest extends Entity{
 			TabletOrder to = MainMod.orders.get(UUID.fromString(getDeliveryUUID()));
 			if(to.currentStatus == OrderStatus.PAYMENT_CHEST_ARRIVED) {
 				ItemStack is = player.getMainHandStack();
-				
+
 				boolean flag = false;
-				
+
 				if(is != null) {
 					if(is.getItem().equals(Items.IRON_INGOT)) {
 						to.price -= is.getCount();
@@ -151,9 +159,10 @@ public class EntityDeliveryChest extends Entity{
 						flag = true;
 					}
 				}
-				
+
 				if(!flag) {
-					player.sendMessage(new TranslatableText("mcvmcomputers.click_with_ingots").formatted(Formatting.RED), false);
+					// TranslatableText -> Text.translatable
+					player.sendMessage(Text.translatable("mcvmcomputers.click_with_ingots").formatted(Formatting.RED), false);
 				}else {
 					if(to.price < 0) {
 						is.increment(to.price * -1);
@@ -162,20 +171,21 @@ public class EntityDeliveryChest extends Entity{
 						to.currentStatus = OrderStatus.PAYMENT_CHEST_RECEIVING;
 					}
 				}
-				
+
 				return flag ? ActionResult.SUCCESS : ActionResult.FAIL;
 			}else if(to.currentStatus == OrderStatus.ORDER_CHEST_ARRIVED) {
-				player.world.spawnEntity(new ItemEntity(player.world, this.getX(), this.getY()+1.5, this.getZ(), ItemPackage.createPackage(Registry.ITEM.getId(to.items.get(0)))));
+				// Registry.ITEM.getId -> Registries.ITEM.getId
+				player.getWorld().spawnEntity(new ItemEntity(player.getWorld(), this.getX(), this.getY()+1.5, this.getZ(), ItemPackage.createPackage(Registries.ITEM.getId(to.items.get(0)))));
 				to.items.remove(0);
 				if(to.items.size() == 0) {
 					to.currentStatus = OrderStatus.ORDER_CHEST_RECEIVED;
 				}
 			}
 		}
-		
+
 		return super.interact(player, hand);
 	}
-	
+
 	public float getTargetX() {
 		return this.getDataTracker().get(TARGET_X);
 	}
@@ -191,26 +201,28 @@ public class EntityDeliveryChest extends Entity{
 	public Boolean getTakingOff() {
 		return this.getDataTracker().get(TAKING_OFF);
 	}
-	
+
 	public void updateRenderPos(double x, double y, double z) {
 		this.renderOffY = (float) (y - this.getY());
 		this.renderOffZ = (float) (z - this.getZ());
 	}
 
 	@Override
-	public Packet<?> createSpawnPacket() {
+	public Packet<ClientPlayPacketListener> createSpawnPacket() {
 		return new EntitySpawnS2CPacket(this);
 	}
-	
+
+	// В 1.20.1 метод collides() называется canHit()
 	@Override
-	public boolean collides() {
+	public boolean canHit() {
 		return true;
 	}
-	
+
+	// В 1.20.1 метод remove теперь требует указания причины удаления
 	@Override
-	public void remove() {
-		super.remove();
-		if(world.isClient) {
+	public void remove(RemovalReason reason) {
+		super.remove(reason);
+		if(getWorld().isClient) { // Изменено world -> getWorld()
 			ClientMod.currentDeliveryChest = this;
 			MainMod.deliveryChestSound.run();
 		}
